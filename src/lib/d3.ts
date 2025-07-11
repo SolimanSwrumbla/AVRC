@@ -25,7 +25,7 @@ export function renderForceGraph(width: number, height: number, nodes: BoardGame
 				.forceLink(links.filter((link) => link.similarity >= MIN_LINK_SIMILARITY))
 				.id((d: any) => d.id)
 				.distance(50)
-				.strength((link) => link.similarity - MIN_LINK_SIMILARITY)
+				.strength((link) => (link.similarity - MIN_LINK_SIMILARITY))
 		)
 		.force('charge', d3.forceManyBody().strength(-100))
 		.force('center', d3.forceCenter(width / 2, height / 2))
@@ -110,9 +110,9 @@ export function renderForceGraph(width: number, height: number, nodes: BoardGame
 
         if (selectedGame) {
             const linkedNodes = linkMap.get(selectedGame.id)!;
-            ctx.lineWidth = 2;
             for (const link of linkedNodes) {
                 if (link.similarity >= MIN_LINK_SIMILARITY) {
+                    ctx.lineWidth = (link.similarity - 0.65) * 15;
                     ctx.beginPath();
                     ctx.strokeStyle = '#69b3a2';
                     ctx.globalAlpha = link.similarity;

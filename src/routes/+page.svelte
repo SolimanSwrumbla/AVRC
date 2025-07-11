@@ -10,10 +10,14 @@
 			<BoardGameGraph {games} />
 		{/await}
 	</div>
+	<div class="test"></div>
 </div>
 
 <style>
 	.container {
+		scroll-snap-type: y mandatory;
+		scroll-behavior: smooth;
+		overflow-y: scroll;
 		height: 100dvh;
 		width: 100%;
 		display: flex;
@@ -21,7 +25,16 @@
 	}
 
 	.graph-container {
+		position: relative;
+		scroll-snap-align: start;
 		width: 100%;
-		height: 100%;
+		min-height: 100%;
+	}
+
+	.test {
+		scroll-snap-align: start;
+		min-height: 100%;
+		width: 100%;
+		background-color: red;
 	}
 </style>
