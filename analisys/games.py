@@ -2,25 +2,22 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from collections import defaultdict
+import community as community_louvain
 
-# Caricamento dei dati
-games_df = pd.read_csv("../static/games.csv").sort_values("NumUserRatings", ascending=False).head(2500)
+# Caricamento dati
+games_df = pd.read_csv("../static/games.csv").sort_values("NumUserRatings", ascending=False).head(500)
 mechanics_df = pd.read_csv("../static/mechanics.csv")
 
-# Colonne con le meccaniche (escludendo l'ID)
 mechanic_columns = [col for col in mechanics_df.columns if col != "BGGId"]
 
-# Aggiunge colonna 'mechanics' a games_df (lista di meccaniche attive per ogni gioco)
+# Colonna mechanics: lista meccaniche attive per gioco
 games_df["mechanics"] = mechanics_df[mechanic_columns].apply(
-    lambda row: [mech for mech in mechanic_columns if row[mech] == 1],
-    axis=1
-)
+    lambda row: [mech for mech in mechanic_columns if row[mech] == 1], axis=1)
 
-# Lista di tutte le meccaniche e mappa meccanica → indice
 all_mechanics = sorted(set(mechanic_columns))
 mech_to_index = {mech: i for i, mech in enumerate(all_mechanics)}
 
-# Funzione per vettorizzare una lista di meccaniche
 def vectorize_mechanics(mechanics):
     vec = np.zeros(len(all_mechanics), dtype=int)
     for mech in mechanics:
@@ -28,25 +25,25 @@ def vectorize_mechanics(mechanics):
             vec[mech_to_index[mech]] = 1
     return vec
 
-# Costruzione della matrice gioco × meccaniche
 mechanics_matrix = np.stack(games_df["mechanics"].apply(vectorize_mechanics))
 
-# Calcolo della similarità coseno tra giochi
+# Similarità coseno tra giochi
 cos_sim = cosine_similarity(mechanics_matrix)
-np.fill_diagonal(cos_sim, 0)  # rimuove gli auto-archi
+np.fill_diagonal(cos_sim, 0)  # no self-loops
 
-# Soglia per includere solo archi significativi
-threshold = 0  # puoi usare ad esempio 0.1 o 0.2 per filtrarne alcuni
+threshold = 0
 rows, cols = np.where(cos_sim > threshold)
 
 # Costruzione grafo
 G = nx.Graph()
 ids = games_df["BGGId"].values
 for i, j in zip(rows, cols):
-    if i < j:  # evita duplicati, grafo non orientato
+    if i < j:
         G.add_edge(ids[i], ids[j], weight=cos_sim[i, j])
 
-# Calcolo strength (grado pesato)
+id_to_name = dict(zip(games_df["BGGId"], games_df["Name"]))
+
+# Calcolo strength (somma pesi)
 strengths = {node: sum(d['weight'] for _, _, d in G.edges(node, data=True)) for node in G.nodes}
 top_10_strength = sorted(strengths.items(), key=lambda x: x[1], reverse=True)[:10]
 
@@ -54,41 +51,103 @@ top_10_strength = sorted(strengths.items(), key=lambda x: x[1], reverse=True)[:1
 degrees = dict(G.degree())
 top_10_degree = sorted(degrees.items(), key=lambda x: x[1], reverse=True)[:10]
 
-# Mappa ID → nome gioco
-id_to_name = dict(zip(games_df["BGGId"], games_df["Name"]))
-
-# Statistiche del grafo
-print("\nStatistiche:")
-print("--------------------------")
-print(f"Numero di nodi: {G.number_of_nodes()}")
-print(f"Numero di archi: {G.number_of_edges()}")
-
+# Statistiche globali
 average_degree = np.mean(list(degrees.values()))
-print(f"Grado medio: {average_degree:.2f}")
+density = nx.density(G)
 
-density = G.number_of_edges() / (G.number_of_nodes() * (G.number_of_nodes() - 1) / 2)
-print(f"Densità: {density:.4f}")
+print("\nStatistiche:")
+print("---------------------------------------")
+print(f"Numero di nodi (giochi):          {G.number_of_nodes()}")
+print(f"Numero di archi (similarità):     {G.number_of_edges()}")
+print(f"Grado medio:                      {average_degree:.2f}")
+print(f"Densità:                          {density:.4f}")
 
-# Diametro e lunghezza media del cammino
-diameter = 3 # nx.diameter(G)
-avg_path_length = 1.57 # nx.average_shortest_path_length(G)
-
-
-# Output top 10 per grado semplice
 print("\nTop 10 giochi per numero di connessioni (grado):")
-print("-----------------------------------------------------")
+print("-------------------------------------------------------------")
 for rank, (game_id, degree) in enumerate(top_10_degree, 1):
     name = id_to_name.get(game_id, "Unknown")
-    print(f"{rank:2d}. {name:<40} {degree} connessioni")
+    print(f"{rank:2d}. {name:<40} Connessioni: {degree}")
 
-# Output top 10 per strength
 print("\nTop 10 giochi per similarità totale (strength):")
-print("---------------------------------------------------")
+print("---------------------------------------------------------------")
 for rank, (game_id, strength) in enumerate(top_10_strength, 1):
     name = id_to_name.get(game_id, "Unknown")
-    print(f"{rank:2d}. {name:<40} {strength:.2f}")
+    print(f"{rank:2d}. {name:<40} Strength: {strength:.4f}")
 
-print("\nDistanze:")
-print("----------------------------------")
-print(f"Lunghezza media del cammino:       {avg_path_length:.2f}")
-print(f"Diametro:                          {diameter}\n")
+# Componente connessa principale
+largest_cc = max(nx.connected_components(G), key=len)
+G_largest = G.subgraph(largest_cc)
+
+# Diametro e cammino medio
+try:
+    diameter = nx.diameter(G_largest)
+    avg_path_length = nx.average_shortest_path_length(G_largest)
+    ecc = nx.eccentricity(G_largest)
+    u = max(ecc, key=ecc.get)
+    v = max(nx.single_source_shortest_path_length(G_largest, u).items(), key=lambda x: x[1])[0]
+    diameter_path = nx.shortest_path(G_largest, source=u, target=v)
+
+    print("\nComponente connessa principale:")
+    print("---------------------------------------")
+    print(f"Nodi nella componente più grande: {len(G_largest)}")
+    print(f"Lunghezza media del cammino:      {avg_path_length:.4f}")
+    print(f"Diametro:                         {diameter}")
+
+    print("\nPath del diametro:")
+    print("------------------------")
+    for node in diameter_path:
+        print(f" → {id_to_name.get(node, 'Unknown')}")
+
+except nx.NetworkXError as e:
+    print("\nErrore nel calcolo del diametro:", e)
+
+# Centralità
+degree_centrality = nx.degree_centrality(G)
+closeness_centrality = nx.closeness_centrality(G)
+betweenness_centrality = nx.betweenness_centrality(G)
+pagerank = nx.pagerank(G)
+
+top_10_degree_cent = sorted(degree_centrality.items(), key=lambda x: x[1], reverse=True)[:10]
+top_10_closeness = sorted(closeness_centrality.items(), key=lambda x: x[1], reverse=True)[:10]
+top_10_betweenness = sorted(betweenness_centrality.items(), key=lambda x: x[1], reverse=True)[:10]
+top_10_pagerank = sorted(pagerank.items(), key=lambda x: x[1], reverse=True)[:10]
+
+print("\nTop 10 giochi per centralità di grado:")
+print("-----------------------------------------------------------------------")
+for rank, (game_id, cent) in enumerate(top_10_degree_cent, 1):
+    print(f"{rank:2d}. {id_to_name.get(game_id, 'Unknown'):<40} Centralità grado: {cent:.6f}")
+
+print("\nTop 10 giochi per centralità di prossimità (closeness):")
+print("----------------------------------------------------------------")
+for rank, (game_id, cent) in enumerate(top_10_closeness, 1):
+    print(f"{rank:2d}. {id_to_name.get(game_id, 'Unknown'):<40} Closeness: {cent:.6f}")
+
+print("\nTop 10 giochi per centralità di intermediazione (betweenness):")
+print("------------------------------------------------------------------")
+for rank, (game_id, cent) in enumerate(top_10_betweenness, 1):
+    print(f"{rank:2d}. {id_to_name.get(game_id, 'Unknown'):<40} Betweenness: {cent:.6f}")
+
+print("\nTop 10 giochi per PageRank:")
+print("-----------------------------------------------------------------")
+for rank, (game_id, pr) in enumerate(top_10_pagerank, 1):
+    print(f"{rank:2d}. {id_to_name.get(game_id, 'Unknown'):<40} PageRank: {pr:.8f}")
+
+# Community detection Louvain
+partition = community_louvain.best_partition(G)
+num_communities = len(set(partition.values()))
+
+communities_dict = defaultdict(list)
+for node, comm_id in partition.items():
+    communities_dict[comm_id].append(node)
+
+communities_list = list(communities_dict.values())
+sorted_communities = sorted(communities_list, key=len, reverse=True)
+
+print(f"\nNumero di comunità rilevate: {num_communities}")
+
+print("\nTop 5 comunità per numero di membri:")
+print("------------------------------------")
+for i, comm in enumerate(sorted_communities[:5]):
+    print(f"Comunità {i+1}: {len(comm)} membri")
+    sample_members = ', '.join(id_to_name.get(node, "Unknown") for node in comm[:5])
+    print(f"  Esempi membri: {sample_members}\n")
