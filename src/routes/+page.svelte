@@ -1,5 +1,8 @@
 <script lang="ts">
 	import BoardGameGraph from '$components/BoardGameGraph.svelte';
+	import ChordDependency from '$components/ChordDependency.svelte';
+	import ScatterPlot from '$components/ScatterPlot.svelte';
+	import StackedBarChart from '$components/StackedBarChart.svelte';
 
 	const { data } = $props();
 </script>
@@ -10,7 +13,21 @@
 			<BoardGameGraph {games} />
 		{/await}
 	</div>
-	<div class="test"></div>
+	<div class="graph-container">
+		{#await data.games then games}
+			<StackedBarChart {games} />
+		{/await}
+	</div>
+	<div class="graph-container">
+		{#await data.games then games}
+			<ChordDependency {games} />
+		{/await}
+	</div>
+	<div class="graph-container">
+		{#await data.games then games}
+			<ScatterPlot {games} />
+		{/await}
+	</div>
 </div>
 
 <style>
@@ -31,10 +48,25 @@
 		min-height: 100%;
 	}
 
-	.test {
+	.graphs-container {
 		scroll-snap-align: start;
-		min-height: 100%;
+		min-height: 100dvh;
 		width: 100%;
-		background-color: red;
+		display: flex;
+	}
+
+	#bar {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-around;
+		align-items: center;
+	}
+
+	#chord {
+		flex: 2;
+		display: flex;
+		justify-content: center;
+		align-items: center;
 	}
 </style>

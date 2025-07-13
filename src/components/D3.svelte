@@ -13,5 +13,8 @@
 		width: 100%;
 		height: 100%;
 		overflow: var(--overflow);
+		display: flex;
+		justify-content: center;
+		align-items: center;
 	}
 </style>
