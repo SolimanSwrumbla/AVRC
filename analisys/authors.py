@@ -13,7 +13,7 @@ designers = designers_df.columns.tolist()
 
 # Estrai la lista dei designer per ogni gioco
 def extract_designers(row):
-    return [name for name, present in zip(designers, row) if present == 1]
+    return [name for name, present in zip(designers, row) if present == 1 and name != "Low-Exp Designer"]
 
 games_df["designers"] = designers_df.apply(extract_designers, axis=1)
 
