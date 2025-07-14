@@ -5,13 +5,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
 import community as community_louvain
 
-# Caricamento dati
 games_df = pd.read_csv("../static/games.csv").sort_values("NumUserRatings", ascending=False).head(500)
 mechanics_df = pd.read_csv("../static/mechanics.csv")
 
 mechanic_columns = [col for col in mechanics_df.columns if col != "BGGId"]
 
-# Colonna mechanics: lista meccaniche attive per gioco
 games_df["mechanics"] = mechanics_df[mechanic_columns].apply(
     lambda row: [mech for mech in mechanic_columns if row[mech] == 1], axis=1)
 
@@ -27,14 +25,12 @@ def vectorize_mechanics(mechanics):
 
 mechanics_matrix = np.stack(games_df["mechanics"].apply(vectorize_mechanics))
 
-# Similarità coseno tra giochi
 cos_sim = cosine_similarity(mechanics_matrix)
-np.fill_diagonal(cos_sim, 0)  # no self-loops
+np.fill_diagonal(cos_sim, 0)
 
 threshold = 0
 rows, cols = np.where(cos_sim > threshold)
 
-# Costruzione grafo
 G = nx.Graph()
 ids = games_df["BGGId"].values
 for i, j in zip(rows, cols):
@@ -43,15 +39,12 @@ for i, j in zip(rows, cols):
 
 id_to_name = dict(zip(games_df["BGGId"], games_df["Name"]))
 
-# Calcolo strength (somma pesi)
 strengths = {node: sum(d['weight'] for _, _, d in G.edges(node, data=True)) for node in G.nodes}
 top_10_strength = sorted(strengths.items(), key=lambda x: x[1], reverse=True)[:10]
 
-# Calcolo grado semplice
 degrees = dict(G.degree())
 top_10_degree = sorted(degrees.items(), key=lambda x: x[1], reverse=True)[:10]
 
-# Statistiche globali
 average_degree = np.mean(list(degrees.values()))
 density = nx.density(G)
 
@@ -74,11 +67,9 @@ for rank, (game_id, strength) in enumerate(top_10_strength, 1):
     name = id_to_name.get(game_id, "Unknown")
     print(f"{rank:2d}. {name:<40} Strength: {strength:.4f}")
 
-# Componente connessa principale
 largest_cc = max(nx.connected_components(G), key=len)
 G_largest = G.subgraph(largest_cc)
 
-# Diametro e cammino medio
 try:
     diameter = nx.diameter(G_largest)
     avg_path_length = nx.average_shortest_path_length(G_largest)
@@ -101,7 +92,6 @@ try:
 except nx.NetworkXError as e:
     print("\nErrore nel calcolo del diametro:", e)
 
-# Centralità
 degree_centrality = nx.degree_centrality(G)
 closeness_centrality = nx.closeness_centrality(G)
 betweenness_centrality = nx.betweenness_centrality(G)
@@ -132,7 +122,6 @@ print("-----------------------------------------------------------------")
 for rank, (game_id, pr) in enumerate(top_10_pagerank, 1):
     print(f"{rank:2d}. {id_to_name.get(game_id, 'Unknown'):<40} PageRank: {pr:.8f}")
 
-# Community detection Louvain
 partition = community_louvain.best_partition(G)
 num_communities = len(set(partition.values()))
 

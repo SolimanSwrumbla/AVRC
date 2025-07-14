@@ -4,31 +4,26 @@ import networkx as nx
 from collections import defaultdict
 import community as community_louvain
 
-# Caricamento dati
 games_df = pd.read_csv("../static/games.csv")
 designers_df = pd.read_csv("../static/designers_reduced.csv")
 
-# Lista dei nomi dei designer dalle colonne
 designers = designers_df.columns.tolist()
 
-# Estrai la lista dei designer per ogni gioco
 def extract_designers(row):
     return [name for name, present in zip(designers, row) if present == 1 and name != "Low-Exp Designer"]
 
 games_df["designers"] = designers_df.apply(extract_designers, axis=1)
 
-# Crea grafo
 G = nx.Graph()
-collaboration_games = defaultdict(list)  # Mappa coppie di designer → lista di giochi
+collaboration_games = defaultdict(list)
 
 # Aggiungi archi per ogni coppia di designer che ha collaborato
 for idx, designers in games_df["designers"].dropna().items():
-    if isinstance(designers, str):  # sicurezza: se la colonna è stata letta come stringa
+    if isinstance(designers, str):
         try:
             designers = eval(designers)
         except:
             continue
-    # Nome reale del gioco (colonna "Name")
     game_title = games_df.at[idx, "Name"] if "Name" in games_df.columns else f"Game_{idx}"
     for d1, d2 in combinations(designers, 2):
         if G.has_edge(d1, d2):
@@ -36,8 +31,6 @@ for idx, designers in games_df["designers"].dropna().items():
         else:
             G.add_edge(d1, d2, weight=1)
         collaboration_games[frozenset([d1, d2])].append(game_title)
-
-# === Calcoli ===
 
 degrees = dict(G.degree())
 strengths = {
@@ -56,8 +49,6 @@ G_largest = G.subgraph(largest_cc)
 diameter = nx.diameter(G_largest)
 avg_path_length = nx.average_shortest_path_length(G_largest)
 
-# === Calcolo centralità ===
-
 degree_centrality = nx.degree_centrality(G)
 closeness_centrality = nx.closeness_centrality(G)
 betweenness_centrality = nx.betweenness_centrality(G)
@@ -68,11 +59,9 @@ top_10_closeness = sorted(closeness_centrality.items(), key=lambda x: x[1], reve
 top_10_betweenness = sorted(betweenness_centrality.items(), key=lambda x: x[1], reverse=True)[:10]
 top_10_pagerank = sorted(pagerank.items(), key=lambda x: x[1], reverse=True)[:10]
 
-# === Ponti (bridge edges) ===
 bridges = list(nx.bridges(G))
 num_bridges = len(bridges)
 
-# Conta quanti bridge coinvolgono ogni nodo
 bridge_counts = defaultdict(int)
 for u, v in bridges:
     bridge_counts[u] += 1
@@ -80,22 +69,16 @@ for u, v in bridges:
 
 top_10_bridge_nodes = sorted(bridge_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
-# === Community detection (Louvain) ===
-
 partition = community_louvain.best_partition(G)
 num_communities = len(set(partition.values()))
 
-# Raggruppa i nodi per community
 communities_dict = defaultdict(list)
 for node, comm_id in partition.items():
     communities_dict[comm_id].append(node)
 
 communities_list = list(communities_dict.values())
 
-# Ordina le comunità per dimensione (decrescente)
 sorted_communities = sorted(communities_list, key=len, reverse=True)
-
-# === Output ordinato ===
 
 print("\nStatistiche:")
 print("---------------------------------------")
@@ -121,7 +104,6 @@ print(f"Nodi nella componente più grande:  {len(G_largest)}")
 print(f"Lunghezza media del cammino:       {avg_path_length:.2f}")
 print(f"Diametro:                          {diameter}")
 
-# Trova la coppia di nodi a distanza massima (diametro)
 ecc = nx.eccentricity(G_largest)
 u = max(ecc, key=ecc.get)
 v = max(nx.single_source_shortest_path_length(G_largest, u).items(), key=lambda x: x[1])[0]
