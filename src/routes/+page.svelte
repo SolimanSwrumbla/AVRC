@@ -47,26 +47,4 @@
 		width: 100%;
 		min-height: 100%;
 	}
-
-	.graphs-container {
-		scroll-snap-align: start;
-		min-height: 100dvh;
-		width: 100%;
-		display: flex;
-	}
-
-	#bar {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		justify-content: space-around;
-		align-items: center;
-	}
-
-	#chord {
-		flex: 2;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-	}
 </style>
